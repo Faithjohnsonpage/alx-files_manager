@@ -170,7 +170,7 @@ class FilesController {
     const { parentId = '0', page = 0 } = req.query;
 
     if (!token) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const keyAuth = `auth_${token}`;
@@ -178,41 +178,41 @@ class FilesController {
       const userId = await redisClient.getAsync(keyAuth);
 
       if (!userId) {
-          return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized' });
       }
 
       const usersCollection = dbClient.database.collection('users');
       const userExists = await usersCollection.findOne({ _id: ObjectId(userId) });
 
       if (!userExists) {
-          return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized' });
       }
 
       const filesCollection = dbClient.database.collection('files');
-        
+
       const pageSize = 20;
       const skip = page * pageSize;
 
-	  const query = {
+      const query = {
         userId: ObjectId(userId),
-        parentId: parentId === '0' ? 0 : ObjectId(parentId)
+        parentId: parentId === '0' ? 0 : ObjectId(parentId),
       };
 
       // Use MongoDB aggregation with facet for pagination
-	  const files = await filesCollection.aggregate([
-        { 
-           $match: query
+      const files = await filesCollection.aggregate([
+        {
+          $match: query,
         },
         {
-           $facet: {
-             data: [{ $skip: skip }, { $limit: pageSize }]
-           }
-        }
-      ]).toArray(); 
+          $facet: {
+            data: [{ $skip: skip }, { $limit: pageSize }],
+          },
+        },
+      ]).toArray();
 
       const response = files.length > 0 ? files[0].data : [];
 
-      return res.json(response.files.map(file => ({
+      return res.json(response.map((file) => ({
         id: file._id,
         userId: file.userId,
         name: file.name,

@@ -120,6 +120,111 @@ class FilesController {
       }
     }
   }
+
+  static async getShow(req, res) {
+    const token = req.headers['x-token'];
+    const { id } = req.params;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const keyAuth = `auth_${token}`;
+    try {
+      const userId = await redisClient.getAsync(keyAuth);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const usersCollection = dbClient.database.collection('users');
+      const userExists = await usersCollection.findOne({ _id: ObjectId(userId) });
+
+      if (!userExists) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const filesCollection = dbClient.database.collection('files');
+      const file = await filesCollection.findOne({ _id: ObjectId(id) });
+
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      return res.json({
+        id: file._id,
+        userId: file.userId,
+        name: file.name,
+        type: file.type,
+        isPublic: file.isPublic,
+        parentId: file.parentId,
+      });
+    } catch (error) {
+      console.error('Error retrieving file:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async getIndex(req, res) {
+    const token = req.headers['x-token'];
+    const { parentId = '0', page = 0 } = req.query;
+
+    if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const keyAuth = `auth_${token}`;
+    try {
+      const userId = await redisClient.getAsync(keyAuth);
+
+      if (!userId) {
+          return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const usersCollection = dbClient.database.collection('users');
+      const userExists = await usersCollection.findOne({ _id: ObjectId(userId) });
+
+      if (!userExists) {
+          return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const filesCollection = dbClient.database.collection('files');
+        
+      const pageSize = 20;
+      const skip = page * pageSize;
+
+	  const query = {
+        userId: ObjectId(userId),
+        parentId: parentId === '0' ? 0 : ObjectId(parentId)
+      };
+
+      // Use MongoDB aggregation with facet for pagination
+	  const files = await filesCollection.aggregate([
+        { 
+           $match: query
+        },
+        {
+           $facet: {
+             data: [{ $skip: skip }, { $limit: pageSize }]
+           }
+        }
+      ]).toArray(); 
+
+      const response = files.length > 0 ? files[0].data : [];
+
+      return res.json(response.files.map(file => ({
+        id: file._id,
+        userId: file.userId,
+        name: file.name,
+        type: file.type,
+        isPublic: file.isPublic,
+        parentId: file.parentId,
+      })));
+    } catch (error) {
+      console.error('Error retrieving files:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
 }
 
 module.exports = FilesController;
